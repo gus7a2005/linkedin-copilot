@@ -1,66 +1,70 @@
-'use client'
+"use client";
 
-import ChatInput from "@/components/chat/ChatInput";
+import { useState } from "react";
+import { ChatMessage } from "@/types/chat";
+import { sendChatMessageStream } from "@/lib/api/chat";
 import ChatMessages from "@/components/chat/ChatMessages";
-import { sendChatMessage } from "@/lib/api/chat";
-import { ChatMessage } from "@/types/chat"
-import { useState } from "react"
-
+import ChatInput from "@/components/chat/ChatInput";
 
 export default function ChatWindow() {
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        {
-            id: 'welcome',
-            role: 'assistant',
-            content: 'Olá! Eu sou o seu copiloto para o LinkedIn. Como posso te ajudar?',
-            createdAt: new Date()
-        },
-    ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "welcome",
+      role: "assistant",
+      content: "Olá! Sou seu copiloto para LinkedIn. Como posso ajudar?",
+      createdAt: new Date(),
+    },
+  ]);
 
-    async function handleSendMessage(text: string) {
-        const userMessage: ChatMessage = {
-            id: crypto.randomUUID(),
-            role: 'user', 
-            content: text,
-            createdAt: new Date()
-        };
+  async function handleSendMessage(text: string) {
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: text,
+      createdAt: new Date(),
+    };
 
+    const botMessageId = crypto.randomUUID();
 
-    setMessages((prev) => [...prev, userMessage]);
+    const botMessage: ChatMessage = {
+      id: botMessageId,
+      role: "assistant",
+      content: "",
+      createdAt: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage, botMessage]);
 
     try {
-        const { reply } = await sendChatMessage(text);
-
-        const botMessage: ChatMessage = {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: reply,
-            createdAt: new Date(),
-        };
-
-        setMessages((prev) => [...prev, botMessage]);
-        } catch (error) {
-            const errorMessage: ChatMessage = {
-                id: crypto.randomUUID(),
-                role: 'assistant',
-                content: 'Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente mais tarde.',
-                createdAt: new Date(),
-            };
-
-            setMessages((prev) => [...prev, errorMessage]);
-        }
+      await sendChatMessageStream(text, (chunk) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === botMessageId
+              ? { ...msg, content: msg.content + chunk }
+              : msg,
+          ),
+        );
+      });
+    } catch {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === botMessageId
+            ? { ...msg, content: "⚠️ Erro ao receber resposta." }
+            : msg,
+        ),
+      );
     }
+  }
 
-    return (
-        <div className="flex h-[90vh] w-full max-w-3xl flex-col rounded-xl border border-zinc-800 bg-zinc-900 shadow-lg">
-            <header className="border-b border-zinc-800 p-4 text-sm font-medium">
-                LinkedIn Copilot
-            </header>
+  return (
+    <div className="flex h-[90vh] w-full max-w-3xl flex-col rounded-xl border border-zinc-800 bg-zinc-900 shadow-lg">
+      <header className="border-b border-zinc-800 p-4 text-sm font-medium">
+        LinkedIn Copilot
+      </header>
 
-            <ChatMessages messages={messages} />
+      <ChatMessages messages={messages} />
 
-            <ChatInput onSend={handleSendMessage} />
-        </div>
-    )
-
+      <ChatInput onSend={handleSendMessage} />
+    </div>
+  );
 }

@@ -1,15 +1,32 @@
-export async function sendChatMessage(message: string) {
-    const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ content: message })
-    });
+export async function sendChatMessageStream(
+  message: string,
+  onChunk: (chunk: string) => void
+) {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+    cache: 'no-store',
+  });
 
-    if(!response.ok) {
-        throw new Error('Erro ao enviar mensagem');
+  if (!response.body) {
+    console.error('Response body é null');
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      onChunk(decoder.decode(value, { stream: true }));
     }
-
-    return response.json() as Promise<{reply: string}>;
+  } catch (err) {
+    console.error('Erro durante streaming:', err);
+  } finally {
+    reader.releaseLock();
+  }
 }
