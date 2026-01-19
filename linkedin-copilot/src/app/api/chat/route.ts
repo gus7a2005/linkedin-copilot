@@ -1,26 +1,25 @@
+export const runtime = 'edge';
+
 import { NextRequest } from 'next/server';
+import { getLLMResponse } from '@/lib/llm';
 
 export async function POST(req: NextRequest) {
   const { message } = await req.json();
 
+  const { stream } = await getLLMResponse(message);
+
   const encoder = new TextEncoder();
 
-  const stream = new ReadableStream({
+  const readableStream = new ReadableStream({
     async start(controller) {
-      const reply = `Recebi sua mensagem: "${message}". Esta resposta está sendo enviada em streaming, como um copiloto real faria.`;
-
-      const words = reply.split(' ');
-
-      for (const word of words) {
-        controller.enqueue(encoder.encode(word + ' '));
-        await new Promise((r) => setTimeout(r, 120));
+      for await (const chunk of stream) {
+        controller.enqueue(encoder.encode(chunk));
       }
-
       controller.close();
     },
   });
 
-  return new Response(stream, {
+  return new Response(readableStream, {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
     },
